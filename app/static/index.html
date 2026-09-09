@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-900 text-slate-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fact Knowledge Layer — Cross-Document Fact Grounding & Reasoning</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f7ff',
+                            100: '#e0effe',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Lucide Icons CDN with async load -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="h-full flex flex-col font-sans bg-slate-950 text-slate-100">
+
+    <!-- Top Navigation Header -->
+    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20 font-bold text-sm">
+                    FK
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold text-white tracking-tight">Fact Knowledge Layer</h1>
+                    <p class="text-xs text-slate-400">Document Grounding & Cross-Document Reasoning</p>
+                </div>
+            </div>
+
+            <!-- Tab Buttons -->
+            <nav class="flex items-center space-x-1 bg-slate-800/80 p-1 rounded-xl border border-slate-700/50">
+                <button onclick="switchTab('dashboard')" id="tab-dashboard" class="tab-btn px-4 py-2 text-xs font-semibold rounded-lg text-white bg-blue-600 transition shadow">
+                    Dashboard
+                </button>
+                <button onclick="switchTab('upload')" id="tab-upload" class="tab-btn px-4 py-2 text-xs font-medium rounded-lg text-slate-300 hover:text-white transition">
+                    Upload PDF
+                </button>
+                <button onclick="switchTab('facts')" id="tab-facts" class="tab-btn px-4 py-2 text-xs font-medium rounded-lg text-slate-300 hover:text-white transition">
+                    Grounded Facts
+                </button>
+                <button onclick="switchTab('relationships')" id="tab-relationships" class="tab-btn px-4 py-2 text-xs font-medium rounded-lg text-slate-300 hover:text-white transition">
+                    Relationships
+                </button>
+            </nav>
+
+            <div class="flex items-center space-x-2">
+                <button onclick="runGlobalAnalysis()" class="px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-blue-400 border border-slate-700 rounded-lg transition flex items-center">
+                    Analyze
+                </button>
+                <button onclick="resetSystem()" class="px-3 py-1.5 text-xs font-medium bg-red-950/50 hover:bg-red-900/50 text-red-400 border border-red-800/40 rounded-lg transition flex items-center">
+                    Reset DB
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Banner Pitch -->
+    <div class="bg-gradient-to-r from-blue-900/30 via-indigo-900/20 to-slate-900 border-b border-blue-900/30 py-3">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between text-xs text-slate-300">
+            <div class="flex items-center space-x-2">
+                <span class="px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30 font-mono text-[10px] uppercase tracking-wider font-bold">Core Concept</span>
+                <span>This system converts scattered PDF documents into grounded facts and automatically determines corroboration, contradiction, and contextual differences across documents.</span>
+            </div>
+            <div class="text-slate-400 font-mono">Mistral API + PostgreSQL JSONB</div>
+        </div>
+    </div>
+
+    <!-- Main Content Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+
+        <!-- 1. DASHBOARD VIEW -->
+        <div id="view-dashboard" class="tab-view space-y-6">
+            <!-- Stat Cards -->
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm">
+                    <div class="flex items-center justify-between text-slate-400 text-xs mb-1">
+                        <span>Documents</span>
+                    </div>
+                    <div id="stat-documents" class="text-2xl font-bold text-white">...</div>
+                </div>
+                <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 shadow-sm">
+                    <div class="flex items-center justify-between text-slate-400 text-xs mb-1">
+                        <span>Grounded Facts</span>
+                    </div>
+                    <div id="stat-facts" class="text-2xl font-bold text-white">...</div>
+                </div>
+                <div class="bg-slate-900 border border-emerald-900/40 rounded-xl p-4 shadow-sm">
+                    <div class="flex items-center justify-between text-emerald-400 text-xs mb-1">
+                        <span>Corroboration</span>
+                    </div>
+                    <div id="stat-corroboration" class="text-2xl font-bold text-emerald-300">...</div>
+                </div>
+                <div class="bg-slate-900 border border-rose-900/40 rounded-xl p-4 shadow-sm">
+                    <div class="flex items-center justify-between text-rose-400 text-xs mb-1">
+                        <span>Contradiction</span>
+                    </div>
+                    <div id="stat-contradiction" class="text-2xl font-bold text-rose-300">...</div>
+                </div>
+                <div class="bg-slate-900 border border-amber-900/40 rounded-xl p-4 shadow-sm">
+                    <div class="flex items-center justify-between text-amber-400 text-xs mb-1">
+                        <span>Contextual Diff</span>
+                    </div>
+                    <div id="stat-contextual" class="text-2xl font-bold text-amber-300">...</div>
+                </div>
+                <div class="bg-slate-900 border border-purple-900/40 rounded-xl p-4 shadow-sm">
+                    <div class="flex items-center justify-between text-purple-400 text-xs mb-1">
+                        <span>Uncertainty</span>
+                    </div>
+                    <div id="stat-uncertainty" class="text-2xl font-bold text-purple-300">...</div>
+                </div>
+            </div>
+
+            <!-- Demo Quick Setup Box -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 relative overflow-hidden">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
+                    <div>
+                        <h3 class="text-base font-semibold text-white flex items-center">
+                            Required Assignment Demo Cases
+                        </h3>
+                        <p class="text-xs text-slate-400 mt-1 max-w-2xl">
+                            Demonstrate all four required evaluation cases (Corroboration, Genuine Contradiction, Contextual Difference, and Uncertainty/Reasoning Limitation) using synthetic test documents.
+                        </p>
+                    </div>
+                    <button onclick="triggerSeedDemo()" id="btn-seed-demo" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs rounded-xl shadow-lg shadow-blue-500/20 transition flex items-center shrink-0">
+                        Load Demo Datasets
+                    </button>
+                </div>
+            </div>
+
+            <!-- Recent Documents Table -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6">
+                <h3 class="text-sm font-semibold text-white mb-4">
+                    Ingested PDF Documents
+                </h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs">
+                        <thead class="text-slate-400 border-b border-slate-800 bg-slate-950/50">
+                            <tr>
+                                <th class="py-2.5 px-3">Doc ID</th>
+                                <th class="py-2.5 px-3">Filename</th>
+                                <th class="py-2.5 px-3">SHA-256 Hash</th>
+                                <th class="py-2.5 px-3">Uploaded At</th>
+                                <th class="py-2.5 px-3">Facts Extracted</th>
+                            </tr>
+                        </thead>
+                        <tbody id="documents-table-body" class="divide-y divide-slate-800/60 text-slate-300">
+                            <tr>
+                                <td colspan="5" class="py-6 text-center text-slate-500">Loading documents...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. UPLOAD VIEW -->
+        <div id="view-upload" class="tab-view hidden space-y-6">
+            <div class="max-w-2xl mx-auto space-y-6">
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center space-y-4">
+                    <div class="w-16 h-16 rounded-2xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center mx-auto text-blue-400 font-bold text-xl">
+                        PDF
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-bold text-white">Upload PDF Document</h2>
+                        <p class="text-xs text-slate-400 mt-1">Select a PDF file to extract page-aware facts and compute cross-document relationships.</p>
+                    </div>
+
+                    <form id="upload-form" class="space-y-4">
+                        <input type="file" id="pdf-file-input" accept=".pdf" class="hidden" onchange="handleFileSelect(event)">
+                        
+                        <div onclick="document.getElementById('pdf-file-input').click()" 
+                             class="border-2 border-dashed border-slate-700 hover:border-blue-500 rounded-xl p-8 cursor-pointer transition bg-slate-950/40 group">
+                            <div id="drop-zone-text" class="text-slate-400 text-xs group-hover:text-slate-200">
+                                <span class="font-semibold text-blue-400">Click to upload</span> or drag and drop PDF file here
+                            </div>
+                        </div>
+
+                        <button type="submit" id="upload-btn" class="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs rounded-xl shadow-lg shadow-blue-500/20 transition flex items-center justify-center">
+                            Extract Facts & Analyze
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Processing Output Card -->
+                <div id="upload-result-card" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 hidden space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <h3 class="text-sm font-semibold text-white">
+                            Extraction Result
+                        </h3>
+                        <span id="result-status-badge" class="px-2 py-0.5 text-[10px] font-mono rounded bg-emerald-900/40 text-emerald-300 border border-emerald-700/40">DONE</span>
+                    </div>
+                    <div id="upload-result-content" class="text-xs space-y-2 text-slate-300"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. FACTS EXPLORER VIEW -->
+        <div id="view-facts" class="tab-view hidden space-y-6">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <h3 class="text-sm font-semibold text-white">
+                        Grounded Facts Knowledge Base
+                    </h3>
+                    <div class="flex items-center space-x-2">
+                        <input type="text" id="fact-search-input" onkeyup="filterFactsTable()" placeholder="Filter by subject or property..." class="px-3 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 w-64">
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs">
+                        <thead class="text-slate-400 border-b border-slate-800 bg-slate-950/50">
+                            <tr>
+                                <th class="py-2.5 px-3">ID</th>
+                                <th class="py-2.5 px-3">Source Document</th>
+                                <th class="py-2.5 px-3">Page</th>
+                                <th class="py-2.5 px-3">Subject</th>
+                                <th class="py-2.5 px-3">Property</th>
+                                <th class="py-2.5 px-3">Attributes (JSONB)</th>
+                                <th class="py-2.5 px-3">Confidence</th>
+                                <th class="py-2.5 px-3">Verbatim Evidence Quote</th>
+                            </tr>
+                        </thead>
+                        <tbody id="facts-table-body" class="divide-y divide-slate-800/60 text-slate-300">
+                            <tr>
+                                <td colspan="8" class="py-6 text-center text-slate-500">Loading extracted facts...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. RELATIONSHIPS VIEW -->
+        <div id="view-relationships" class="tab-view hidden space-y-6">
+            <div class="flex items-center justify-between bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+                <div class="flex items-center space-x-2">
+                    <span class="text-xs font-semibold text-slate-300">Filter by Relationship:</span>
+                    <button onclick="filterRelationships('all')" id="rel-filter-all" class="px-3 py-1 text-xs rounded-lg bg-blue-600 text-white font-medium">All</button>
+                    <button onclick="filterRelationships('corroboration')" id="rel-filter-corroboration" class="px-3 py-1 text-xs rounded-lg bg-slate-800 text-slate-300 hover:text-white font-medium">Corroboration</button>
+                    <button onclick="filterRelationships('contradiction')" id="rel-filter-contradiction" class="px-3 py-1 text-xs rounded-lg bg-slate-800 text-slate-300 hover:text-white font-medium">Contradiction</button>
+                    <button onclick="filterRelationships('contextual_difference')" id="rel-filter-contextual_difference" class="px-3 py-1 text-xs rounded-lg bg-slate-800 text-slate-300 hover:text-white font-medium">Contextual Difference</button>
+                </div>
+            </div>
+
+            <!-- Relationships Container -->
+            <div id="relationships-container" class="space-y-4">
+                <div class="text-center py-12 text-slate-500 text-xs">No cross-document relationships stored yet.</div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-800 bg-slate-900/50 py-4 text-center text-xs text-slate-500">
+        Superjoin VIT 2026 Engineering Intern Hiring Assignment — Fact Knowledge Layer Prototype
+    </footer>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        let currentTab = 'dashboard';
+        let allRelationshipsData = [];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (window.lucide && lucide.createIcons) lucide.createIcons();
+            loadDashboardData();
+        });
+
+        function switchTab(tabName) {
+            currentTab = tabName;
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('bg-blue-600', 'text-white', 'shadow');
+                btn.classList.add('text-slate-300');
+            });
+            const activeBtn = document.getElementById(`tab-${tabName}`);
+            if (activeBtn) {
+                activeBtn.classList.add('bg-blue-600', 'text-white', 'shadow');
+                activeBtn.classList.remove('text-slate-300');
+            }
+
+            document.querySelectorAll('.tab-view').forEach(view => view.classList.add('hidden'));
+            document.getElementById(`view-${tabName}`).classList.remove('hidden');
+
+            if (tabName === 'dashboard') loadDashboardData();
+            if (tabName === 'facts') loadFactsData();
+            if (tabName === 'relationships') loadRelationshipsData();
+        }
+
+        async function loadDashboardData() {
+            try {
+                const [docsRes, factsRes, relsRes] = await Promise.all([
+                    fetch('/api/documents'),
+                    fetch('/api/facts'),
+                    fetch('/api/relationships')
+                ]);
+                const docs = await docsRes.json();
+                const facts = await factsRes.json();
+                const rels = await relsRes.json();
+
+                document.getElementById('stat-documents').innerText = docs.length;
+                document.getElementById('stat-facts').innerText = facts.length;
+
+                let corr = 0, contra = 0, ctx = 0, unc = 0;
+                rels.forEach(r => {
+                    if (r.relationship_type === 'corroboration') corr++;
+                    else if (r.relationship_type === 'contradiction') contra++;
+                    else if (r.relationship_type === 'contextual_difference') ctx++;
+                    else unc++;
+                });
+
+                document.getElementById('stat-corroboration').innerText = corr;
+                document.getElementById('stat-contradiction').innerText = contra;
+                document.getElementById('stat-contextual').innerText = ctx;
+                document.getElementById('stat-uncertainty').innerText = unc;
+
+                renderDocumentsTable(docs);
+            } catch (err) {
+                console.error("Failed loading dashboard data:", err);
+            }
+        }
+
+        function renderDocumentsTable(docs) {
+            const tbody = document.getElementById('documents-table-body');
+            if (!docs || docs.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-slate-500">No documents uploaded yet. Upload a PDF or click 'Load Demo Datasets'.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = docs.map(d => `
+                <tr class="hover:bg-slate-800/40 transition">
+                    <td class="py-3 px-3 font-mono font-bold text-blue-400">#${d.id}</td>
+                    <td class="py-3 px-3 font-medium text-white">${d.filename}</td>
+                    <td class="py-3 px-3 font-mono text-[10px] text-slate-400 truncate max-w-[140px]">${d.file_hash ? d.file_hash.substring(0, 16) + '...' : 'N/A'}</td>
+                    <td class="py-3 px-3 text-slate-400">${d.uploaded_at.substring(0, 19)}</td>
+                    <td class="py-3 px-3"><span class="px-2 py-0.5 bg-blue-500/20 text-blue-300 rounded-full font-semibold text-[11px]">${d.fact_count} facts</span></td>
+                </tr>
+            `).join('');
+        }
+
+        async function loadFactsData() {
+            try {
+                const res = await fetch('/api/facts');
+                const facts = await res.json();
+                const tbody = document.getElementById('facts-table-body');
+
+                if (!facts || facts.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="8" class="py-6 text-center text-slate-500">No facts stored in database.</td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = facts.map(f => `
+                    <tr class="hover:bg-slate-800/40 transition">
+                        <td class="py-3 px-3 font-mono text-slate-500">#${f.id}</td>
+                        <td class="py-3 px-3 font-medium text-slate-200">${f.document_name}</td>
+                        <td class="py-3 px-3 font-mono text-blue-400">p.${f.page_number}</td>
+                        <td class="py-3 px-3 font-semibold text-white">${f.subject || 'Null'}</td>
+                        <td class="py-3 px-3 font-mono text-indigo-300">${f.property}</td>
+                        <td class="py-3 px-3 font-mono text-[11px] text-amber-300/90 max-w-[200px] truncate">${JSON.stringify(f.attributes)}</td>
+                        <td class="py-3 px-3"><span class="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800 text-emerald-400 border border-slate-700">${(f.confidence * 100).toFixed(0)}%</span></td>
+                        <td class="py-3 px-3 text-slate-300 italic text-[11px] max-w-xs bg-slate-950/40 rounded border border-slate-800/80 p-2">"${f.evidence_text}"</td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                console.error("Failed loading facts:", err);
+            }
+        }
+
+        function filterFactsTable() {
+            const query = document.getElementById('fact-search-input').value.toLowerCase();
+            const rows = document.querySelectorAll('#facts-table-body tr');
+            rows.forEach(row => {
+                const text = row.innerText.toLowerCase();
+                row.style.display = text.includes(query) ? '' : 'none';
+            });
+        }
+
+        async function loadRelationshipsData() {
+            try {
+                const res = await fetch('/api/relationships');
+                allRelationshipsData = await res.json();
+                renderRelationshipsCards(allRelationshipsData);
+            } catch (err) {
+                console.error("Failed loading relationships:", err);
+            }
+        }
+
+        function filterRelationships(type) {
+            document.querySelectorAll('#view-relationships button[id^="rel-filter-"]').forEach(b => {
+                b.classList.remove('bg-blue-600', 'text-white');
+                b.classList.add('bg-slate-800', 'text-slate-300');
+            });
+            document.getElementById(`rel-filter-${type}`).classList.add('bg-blue-600', 'text-white');
+
+            if (type === 'all') {
+                renderRelationshipsCards(allRelationshipsData);
+            } else {
+                const filtered = allRelationshipsData.filter(r => r.relationship_type === type);
+                renderRelationshipsCards(filtered);
+            }
+        }
+
+        function renderRelationshipsCards(rels) {
+            const container = document.getElementById('relationships-container');
+            if (!rels || rels.length === 0) {
+                container.innerHTML = `<div class="text-center py-12 text-slate-500 text-xs">No matching relationships found.</div>`;
+                return;
+            }
+
+            container.innerHTML = rels.map(r => {
+                let badgeStyle = "bg-emerald-950/80 border-emerald-700/60 text-emerald-300";
+                let typeTitle = "CORROBORATION";
+
+                if (r.relationship_type === 'contradiction') {
+                    badgeStyle = "bg-rose-950/80 border-rose-700/60 text-rose-300";
+                    typeTitle = "CONTRADICTION";
+                } else if (r.relationship_type === 'contextual_difference') {
+                    badgeStyle = "bg-amber-950/80 border-amber-700/60 text-amber-300";
+                    typeTitle = "CONTEXTUAL DIFFERENCE";
+                }
+
+                const fa = r.fact_a;
+                const fb = r.fact_b;
+
+                return `
+                <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4 shadow-lg">
+                    <!-- Card Header -->
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <div class="flex items-center space-x-2">
+                            <span class="px-3 py-1 rounded-lg border font-mono text-xs font-bold flex items-center ${badgeStyle}">
+                                ${typeTitle}
+                            </span>
+                            <span class="text-xs text-slate-400 font-mono">Relationship #${r.id}</span>
+                        </div>
+                        <span class="text-xs text-slate-400 font-mono">Confidence: <strong class="text-white">${(r.confidence * 100).toFixed(0)}%</strong></span>
+                    </div>
+
+                    <!-- Side-by-side Evidence Cards -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- Fact A -->
+                        <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-2">
+                            <div class="flex items-center justify-between text-xs">
+                                <span class="font-bold text-blue-400">Fact A (Doc #${fa.document_id})</span>
+                                <span class="font-mono text-slate-400">${fa.document_name} • p.${fa.page_number}</span>
+                            </div>
+                            <div class="text-xs text-white font-semibold">${fa.subject} — <span class="text-indigo-300 font-mono">${fa.property}</span></div>
+                            <div class="text-xs font-mono text-amber-300 bg-slate-900 p-2 rounded border border-slate-800">${JSON.stringify(fa.attributes)}</div>
+                            <div class="text-[11px] text-slate-300 italic bg-slate-900/80 p-2 rounded border border-slate-800/80">"${fa.evidence_text}"</div>
+                        </div>
+
+                        <!-- Fact B -->
+                        <div class="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-2">
+                            <div class="flex items-center justify-between text-xs">
+                                <span class="font-bold text-blue-400">Fact B (Doc #${fb.document_id})</span>
+                                <span class="font-mono text-slate-400">${fb.document_name} • p.${fb.page_number}</span>
+                            </div>
+                            <div class="text-xs text-white font-semibold">${fb.subject} — <span class="text-indigo-300 font-mono">${fb.property}</span></div>
+                            <div class="text-xs font-mono text-amber-300 bg-slate-900 p-2 rounded border border-slate-800">${JSON.stringify(fb.attributes)}</div>
+                            <div class="text-[11px] text-slate-300 italic bg-slate-900/80 p-2 rounded border border-slate-800/80">"${fb.evidence_text}"</div>
+                        </div>
+                    </div>
+
+                    <!-- Reasoning Explanation -->
+                    <div class="bg-blue-950/20 border border-blue-900/30 rounded-xl p-3 text-xs text-slate-300">
+                        <strong class="text-blue-300">LLM Reasoning Explanation:</strong> ${r.explanation}
+                    </div>
+                </div>
+                `;
+            }).join('');
+
+            if (window.lucide && lucide.createIcons) lucide.createIcons();
+        }
+
+        async function triggerSeedDemo() {
+            const btn = document.getElementById('btn-seed-demo');
+            btn.disabled = true;
+            btn.innerHTML = `Ingesting Demo Datasets...`;
+
+            try {
+                const res = await fetch('/api/analysis/run', { method: 'POST' });
+                await res.json();
+                alert("Demo datasets ingested & analyzed successfully!");
+                loadDashboardData();
+            } catch (err) {
+                alert("Error seeding demo datasets: " + err);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `Load Demo Datasets`;
+            }
+        }
+
+        async function runGlobalAnalysis() {
+            try {
+                const res = await fetch('/api/analysis/run', { method: 'POST' });
+                const data = await res.json();
+                alert(`Analysis complete! Identified ${data.analyzed_count} relationships.`);
+                loadDashboardData();
+            } catch (err) {
+                alert("Analysis failed: " + err);
+            }
+        }
+
+        async function resetSystem() {
+            if (!confirm("Are you sure you want to reset the database? All documents, facts, and relationships will be deleted.")) return;
+            try {
+                await fetch('/api/reset', { method: 'POST' });
+                alert("Database reset clean.");
+                loadDashboardData();
+            } catch (err) {
+                alert("Reset failed: " + err);
+            }
+        }
+
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if (file) {
+                document.getElementById('drop-zone-text').innerHTML = `<span class="font-bold text-emerald-400">${file.name}</span> (${(file.size / 1024).toFixed(1)} KB)`;
+            }
+        }
+
+        document.getElementById('upload-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById('pdf-file-input');
+            if (!fileInput.files || fileInput.files.length === 0) {
+                alert("Please select a PDF file first.");
+                return;
+            }
+
+            const btn = document.getElementById('upload-btn');
+            btn.disabled = true;
+            btn.innerHTML = `Processing & Extracting...`;
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            try {
+                const res = await fetch('/api/documents/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+
+                const resultCard = document.getElementById('upload-result-card');
+                const resultContent = document.getElementById('upload-result-content');
+                resultCard.classList.remove('hidden');
+
+                if (data.already_processed) {
+                    resultContent.innerHTML = `
+                        <div class="p-3 bg-amber-950/40 border border-amber-800/40 rounded-lg text-amber-300">
+                            <strong>Notice:</strong> Document content hash matched existing record #${data.document_id}. Loaded ${data.facts_extracted} existing facts.
+                        </div>
+                    `;
+                } else {
+                    resultContent.innerHTML = `
+                        <div class="p-3 bg-emerald-950/40 border border-emerald-800/40 rounded-lg text-emerald-300">
+                            <strong>Success:</strong> Extracted <strong>${data.facts_extracted}</strong> facts from PDF page-by-page. Identified <strong>${data.new_relationships ? data.new_relationships.length : 0}</strong> cross-document relationships.
+                        </div>
+                    `;
+                }
+
+                loadDashboardData();
+            } catch (err) {
+                alert("Upload failed: " + err);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `Extract Facts & Analyze`;
+            }
+        });
+    </script>
+</body>
+</html>
