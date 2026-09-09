@@ -12,6 +12,7 @@
 
 ## 1. Project Overview
 
+This project is live at https://fact-knowledge-checker.onrender.com/
 Important facts are scattered across different documents. The same fact may be phrased differently, appear in multiple places, be supported by multiple pieces of evidence, contradict another document, or appear contradictory while actually referring to different time periods, scopes, or units.
 
 This system solves this challenge by building a persistent, structured **Fact Knowledge Layer**. It:
